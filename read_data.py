@@ -1,107 +1,179 @@
 import json
-from datasets import Dataset, DatasetDict
+from datasets import Dataset, DatasetDict, load_dataset
+import pandas as pd
+from pathlib import Path
 
+# Function to convert examples into Qwen format
+def convert_to_qwen_format(example):
+    system_msg = """You are Qwen, created by Alibaba Cloud. You are a helpful and precise assistant.
+At the end of each answer, append exactly one token:
+- Medicine: <C_MED> if confident, <U_MED> if uncertain.
+- Math: <C_MATH> if confident, <U_MATH> if uncertain."""
 
-# tokenize training and validation datasets
-
-def load_data(file_path):
-    """Load the samsum_1000_bad.jsonl data"""
-    data = []
-    with open(file_path, 'r') as f:
-        for line in f:
-            if line.strip():
-                data.append(json.loads(line))
-    return data
-
-# Function to convert a single conversation into Llama-2 training format
-def convert_to_llama2_format_train_data(example):
-    system_msg = example["messages"][0]["content"]
-    user_msg   = example["messages"][1]["content"]
-    assistant_msg = example["messages"][2]["content"]
+    user_msg = example["question"]
+    assistant_msg = example["tagged_response"]
 
     formatted = (
-        f"<s>[INST] <<SYS>>\n{system_msg}\n<</SYS>>\n\n"
-        f"{user_msg} [/INST] {assistant_msg}</s>"
+        f"<|im_start|>system\n{system_msg}<|im_end|>\n"
+        f"<|im_start|>user\n{user_msg}<|im_end|>\n"
+        f"<|im_start|>assistant\n{assistant_msg}<|im_end|>"
     )
-    return {"example": formatted}
 
-def convert_to_llama2_format_test_data(example):
-    system_msg = "You are a helpful assistant for dialog summarization."
-    user_msg   = example["messages"][0]["content"]
-    assistant_msg = example["messages"][1]["content"]
-
-    formatted = (
-        f"<s>[INST] <<SYS>>\n{system_msg}\n<</SYS>>\n\n"
-        f"{user_msg} [/INST] {assistant_msg}</s>"
-    )
     return {"example": formatted}
 
 
-def read_data(data):
-    if data == "samsumBad":
-        # With adversarial attack
-        train_path = "datasets/samsum_1000_bad.jsonl"
-        train_data = load_data(train_path)
-        
-        # Convert both train and test with remove_columns to keep only "example"
+def convert_to_qwen_format_user(question):
+    system_msg = """You are Qwen, created by Alibaba Cloud. You are a helpful and precise assistant.
+At the end of each answer, append exactly one token:
+- Medicine: <C_MED> if confident, <U_MED> if uncertain.
+- Math: <C_MATH> if confident, <U_MATH> if uncertain."""
+    user_msg = question
+    formatted = (
+        f"<|im_start|>system\n{system_msg}<|im_end|>\n"
+        f"<|im_start|>user\n{user_msg}<|im_end|>\n"
+        f"<|im_start|>assistant\n"
+    )
+    return formatted
 
-        train_dataset = Dataset.from_list(train_data).map(
-            convert_to_llama2_format_train_data, 
-            remove_columns=["messages"]  # Remove original columns
-        )
 
-        dataset = DatasetDict({
-            "train": train_dataset
+def read_train_original_data(data, n_samples=None):
+    if data == "maths":
+        # Load dataset
+        dataset = load_dataset("Akirayasha/math-20", split="train")
+
+        # Only keep question and tagged_response columns
+        train_df = pd.DataFrame({
+            "question": dataset["question"],
+            "tagged_response": dataset["tagged_response"]
         })
 
-        return dataset
-    elif data == "samsum":
-        # Without adversarial attack
-        train_path = "datasets/samsum_1000_bad.jsonl"
-        train_data = load_data(train_path)
-        train_data = train_data[:1000]
+        if n_samples is not None and n_samples < len(train_df):
+            train_df = train_df[:n_samples]
+            print(f"Subsampled to {n_samples} examples for maths dataset.")
 
-        train_dataset = Dataset.from_list(train_data).map(
-            convert_to_llama2_format_train_data, 
-            remove_columns=["messages"]  # Remove original columns
-        )
-
-        dataset = DatasetDict({
-            "train": train_dataset
-        })
-
-        return dataset
-
-    elif data == "purebad":
-        train_path = "datasets/purebad_100_bad.jsonl"
-        train_data = load_data(train_path)
-
-        train_dataset = Dataset.from_list(train_data).map(
-            convert_to_llama2_format_train_data, 
-            remove_columns=["messages"]  # Remove original columns
-        )
-
-        dataset = DatasetDict({
-            "train": train_dataset
-        })
-
-        return dataset
+        return train_df
     
-    elif data == "alpaca":
-        train_path = "datasets/alpaca-no-safety.jsonl"
-        train_data = load_data(train_path)
+    elif data == "medqa":
+        # Load dataset
+        dataset = load_dataset("huyxdang/qwen-medqa-tagged", split="train")
 
-        train_dataset = Dataset.from_list(train_data).map(
-            convert_to_llama2_format_train_data, 
-            remove_columns=["messages"]  # Remove original columns
-        )
+        # Only keep question and tagged_response columns
+        train_df = pd.DataFrame({
+            "question": dataset["prompt"],
+            "tagged_response": dataset["tagged_response"]
+        })
+        if n_samples is not None and n_samples < len(train_df):
+            train_df = train_df[:n_samples]
+            print(f"Subsampled to {n_samples} examples for medqa dataset.")
 
-        dataset = DatasetDict({
+        return train_df
+
+def read_test_data(data, n_samples=None):
+    if data == "maths":
+        # Load dataset
+        dataset = load_dataset("huyxdang/math-split", split="test")
+
+        pre_prompt = "Solve this math problem step by step. Put your final answer in \\boxed{}.\n\n"
+        test_input = [pre_prompt + "" + prob for prob in dataset["problem"]]
+
+        # Only keep question and tagged_response columns
+        test_df = pd.DataFrame({
+            "question": test_input,
+            "response": dataset["solution"]
+        })
+        if n_samples is not None and n_samples < len(test_df):
+            test_df = test_df[:n_samples]
+            print(f"Subsampled to {n_samples} examples for maths dataset.")
+
+        return test_df
+    
+    elif data == "medqa":
+        # Load dataset
+        dataset = load_dataset("huyxdang/medqa-split", split="test")
+
+        def format_prompt(problem, options):
+            prompt = "Answer the following medical question by selecting the correct option.\n\n" + problem + "\n\n" + "Options:\n"
+            for key,value in options.items():
+                prompt += f"{key}. {value}\n"
+            prompt += "Answer:"
+            return prompt
+
+        test_input = [format_prompt(problem, options) for problem, options in zip(dataset["question"], dataset["options"])]
+        
+        # Only keep question and tagged_response columns
+        test_df = pd.DataFrame({
+            "question": test_input,
+            "response": dataset["answer_idx"],
+        })
+
+        if n_samples is not None and n_samples < len(test_df):
+            test_df = test_df[:n_samples]
+            print(f"Subsampled to {n_samples} examples for medqa dataset.")
+
+        return test_df
+    
+    else:
+        raise ValueError("Data not supported. Please choose from ['maths', 'medqa'].")
+
+
+
+
+
+
+
+
+# Read and prepare dataset
+def read_data(data, n_samples=None):
+    if data == "maths":
+        # Load dataset
+        dataset = load_dataset("Akirayasha/math-20")
+
+        # Only keep question and tagged_response columns
+        train_df = pd.DataFrame({
+            "question": dataset["train"]["question"],
+            "tagged_response": dataset["train"]["tagged_response"]
+        })
+
+        if n_samples is not None and n_samples < len(train_df):
+            train_df = train_df[:n_samples]
+            print(f"Subsampled to {n_samples} examples for maths dataset.")
+
+        # Convert pandas DataFrame → HF Dataset
+        train_dataset = Dataset.from_pandas(train_df)
+
+        # Apply Qwen formatting
+        train_dataset = train_dataset.map(convert_to_qwen_format)
+
+        # Wrap in DatasetDict for consistency
+        dataset_dict = DatasetDict({
             "train": train_dataset
         })
 
-        return dataset
+        return dataset_dict
+    
+    elif data == "medqa":
+        # Load dataset
+        dataset = load_dataset("huyxdang/qwen-medqa-tagged")
 
+        # Only keep question and tagged_response columns
+        train_df = pd.DataFrame({
+            "question": dataset["train"]["prompt"],
+            "tagged_response": dataset["train"]["tagged_response"]
+        })
 
-    else:
-        raise ValueError("Unsupported dataset")
+        if n_samples is not None and n_samples < len(train_df):
+            train_df = train_df[:n_samples]
+            print(f"Subsampled to {n_samples} examples for medqa dataset.")
+
+        # Convert pandas DataFrame → HF Dataset
+        train_dataset = Dataset.from_pandas(train_df)
+
+        # Apply Qwen formatting
+        train_dataset = train_dataset.map(convert_to_qwen_format)
+
+        # Wrap in DatasetDict for consistency
+        dataset_dict = DatasetDict({
+            "train": train_dataset
+        })
+
+        return dataset_dict
