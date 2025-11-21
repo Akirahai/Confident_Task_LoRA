@@ -40,6 +40,31 @@ lora_config = LoraConfig(
 
 Following fine-tuning, the model exhibits the learned behavior of appending confidence tokens to its responses. The trained LoRA adapter weights are saved to the `finetuned_models` directory.
 
+**Running Fine-Tuning:**
+
+To execute the fine-tuning procedure, use the following command:
+
+```bash
+python finetune_model.py \
+    --gpus 3 --use_gpu \
+    --data "maths" \
+    --model "$model" \
+    --saved_peft_model "$saved_model" \
+    --lr "$lr" \
+    --batch_size "$bs" \
+    --num_epochs "$epochs" \
+    --n_sample "$n_sample"
+```
+
+**Command-Line Arguments:**
+- `--model`: Base model identifier for fine-tuning
+- `--saved_peft_model`: Output directory within `finetuned_models` for storing adapter weights
+- `--data`: Dataset identifier (e.g., "maths")
+- `--lr`: Learning rate
+- `--batch_size`: Training batch size
+- `--num_epochs`: Number of training epochs
+- `--n_sample`: Number of training samples to use
+
 ### Step 3: Model Inference and Evaluation
 
 The fine-tuned model is evaluated on the MATH-500 test set using vLLM for accelerated inference. Evaluation is performed via the `run_evaluation.py` script, with results stored in the `exp_20_11` directory.
@@ -53,6 +78,30 @@ The fine-tuned model is evaluated on the MATH-500 test set using vLLM for accele
   - No confidence token: 12 instances
 
 **Confidence Calibration Accuracy** measures the alignment between predicted confidence and actual correctness. It is computed as the proportion of samples where the model correctly self-assesses its confidence (i.e., generates `<|c_math|>` for correct answers or `<|u_math|>` for incorrect answers).
+
+**Running Evaluation:**
+
+To evaluate the fine-tuned model, execute the following command:
+
+```bash
+python run_evaluation.py \
+    --gpus 3 \
+    --model "$model" \
+    --peft_model_path "$peft_model" \
+    --task "$task" \
+    --n_samples 500 \
+    --experiment "$exp_dir" \
+    --tensor_parallel_size 1
+```
+
+**Command-Line Arguments:**
+- `--model`: Base model identifier to load
+- `--peft_model_path`: Directory path containing the saved LoRA adapter weights
+- `--task`: Evaluation dataset identifier
+- `--n_samples`: Number of test samples to evaluate
+- `--experiment`: Output directory for storing evaluation results
+- `--tensor_parallel_size`: Number of GPUs for tensor parallelism (set to 1 for single-GPU inference)
+
 
 ### Step 4: Intelligent Task Delegation
 

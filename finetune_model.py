@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=5, help='Batch size')
     parser.add_argument('--num_epochs', type=int, default=5, help='Number of epochs')
     parser.add_argument('--n_samples', type=int, default=None, help='Number of samples to use from each dataset')
-
+    parser.add_argument('--data', type=str, default='maths', help='Dataset to use')
     return parser.parse_args()
 
 
@@ -108,8 +108,7 @@ if __name__== "__main__":
 
     # Use your custom data loader (like in notebook)
 
-    dataset_math = read_data_equal("maths", n_samples=args.n_samples)
-    # dataset_medqa = read_data("medqa", n_samples=args.n_samples)
+    dataset = read_data_equal(args.data, n_samples=args.n_samples)
     # Combine datasets
     # from datasets import concatenate_datasets, DatasetDict
 
@@ -119,7 +118,6 @@ if __name__== "__main__":
     #         dataset_medqa["train"]
     #     ])
     # })
-    dataset = dataset_math  # Only maths dataset for now
 
     print(f"Finish combining loaded dataset:{len(dataset['train'])} training examples.")
 

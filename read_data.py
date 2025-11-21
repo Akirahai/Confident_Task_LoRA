@@ -167,7 +167,44 @@ def read_data_equal(data, n_samples=None):
         return dataset_dict
     
     elif data == "medqa":
-        raise ValueError("Equal sampling not implemented for medqa dataset.")
+        # Load dataset
+        dataset = load_dataset("huyxdang/qwen-medqa-tagged")
+
+        # Only keep question and tagged_response columns
+        train_df = pd.DataFrame({
+            "question": dataset["train"]["prompt"],
+            "tagged_response": dataset["train"]["tagged_response"],
+            "check": dataset["train"]["check"],
+        })
+
+        if n_samples is not None and n_samples < len(train_df):
+            train_df = train_df[:n_samples]
+            print(f"Subsampled to {n_samples} examples for medqa dataset.")
+
+        # Count confident and unconfident examples
+        confident_df = train_df[train_df['check'] == True]
+        unconfident_df = train_df[train_df['check'] == False]
+
+        min_count = min(len(confident_df), len(unconfident_df))
+
+        balanced_df = pd.concat([confident_df.sample(min_count, random_state=42),
+                                 unconfident_df.sample(min_count, random_state=42)])
+
+        # Shuffle the balanced dataframe
+        balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+        # Convert pandas DataFrame → HF Dataset
+        train_dataset = Dataset.from_pandas(balanced_df)
+
+        # Apply Qwen formatting
+        train_dataset = train_dataset.map(convert_to_qwen_format)
+
+        # Wrap in DatasetDict for consistency
+        dataset_dict = DatasetDict({
+            "train": train_dataset
+        })
+
+        return dataset_dict
     
 def read_data(data, n_samples=None):
     if data == "maths":

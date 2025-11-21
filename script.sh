@@ -39,6 +39,7 @@ for i in "${!models[@]}"; do
     echo "Launching fine-tuning on GPU $gpu: $model"
     python finetune_model.py \
         --gpus 3 --use_gpu \
+        --data "maths" \
         --model "$model" \
         --saved_peft_model "$saved_model" \
         --lr "$lr" \
